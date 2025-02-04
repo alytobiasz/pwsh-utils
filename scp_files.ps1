@@ -4,8 +4,8 @@
 
 .DESCRIPTION
     This script reads a list of file paths from a text file and copies each file
-    from a Linux server to a local Windows directory using SCP. It uses password
-    authentication and requires sshpass to be installed on Windows.
+    from a Linux server to a local Windows directory using SCP. It uses native
+    PowerShell SSH commands for secure file transfer.
 
 .PARAMETER SourceListPath
     Path to a text file containing Linux file paths (one per line)
@@ -42,8 +42,7 @@
 
 .NOTES
     Requirements:
-    - sshpass must be installed on Windows
-      Install using: choco install sshpass
+    - OpenSSH client must be installed on Windows (included by default in recent Windows 10/11 versions)
     
     File list format (file_list.txt):
     /home/user/documents/file1.pdf
@@ -64,7 +63,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$LocalDestination,
     
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [SecureString]$Password = (Read-Host -AsSecureString "Enter password")
 )
 
@@ -79,9 +78,9 @@ $files = Get-Content $SourceListPath | Where-Object { $_.Trim() -ne "" }
 $totalFiles = $files.Count
 $successCount = 0
 
-# Convert SecureString password to plain text for scp
-$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
-$plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+# Create PSCredential object
+$username = $RemoteUser
+$credentials = New-Object System.Management.Automation.PSCredential($username, $Password)
 
 Write-Host "`nStarting transfer of $totalFiles files..."
 Write-Host "Destination directory: $LocalDestination`n"
@@ -92,26 +91,24 @@ foreach ($file in $files) {
     
     Write-Host "Copying: $file"
     try {
-        # Use sshpass with scp to handle password authentication
-        $env:SSHPASS = $plainPassword
-        $scpCommand = "sshpass -e scp `"$RemoteUser@$RemoteHost`:$file`" `"$localPath`""
-        $result = Invoke-Expression $scpCommand 2>&1
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Success: Copied to $localPath" -ForegroundColor Green
-            $successCount++
-        } else {
-            Write-Host "Failed to copy file: $result" -ForegroundColor Red
-        }
+        # Use native scp command with credentials
+        $result = Get-SCPItem -ComputerName $RemoteHost `
+                            -Credential $credentials `
+                            -Path $file `
+                            -Destination $localPath `
+                            -ErrorAction Stop
+
+        Write-Host "Success: Copied to $localPath" -ForegroundColor Green
+        $successCount++
     } catch {
         Write-Host "Error copying file: $_" -ForegroundColor Red
     }
     Write-Host ""
 }
 
-# Clear the password from environment
-$env:SSHPASS = ""
-[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+# Clear sensitive data
+$credentials = $null
+[System.GC]::Collect()
 
 Write-Host "Transfer complete. Successfully copied $successCount out of $totalFiles files."
 Write-Host "Files are in: $LocalDestination" 
