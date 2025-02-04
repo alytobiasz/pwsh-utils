@@ -17,29 +17,12 @@
 .PARAMETER RemoteHost
     Hostname or IP address of the Linux server
 
-.PARAMETER LocalDestination
-    Local Windows directory where files will be copied to
-
-.PARAMETER Password
-    Password for the Linux server (will be prompted if not provided)
-
 .EXAMPLE
-    # Basic usage (will prompt for password):
+    # Basic usage:
     .\scp_files.ps1 `
         -SourceListPath "C:\path\to\file_list.txt" `
         -RemoteUser "username" `
-        -RemoteHost "server.example.com" `
-        -LocalDestination "C:\Downloads\files"
-
-.EXAMPLE
-    # Usage with password provided in command:
-    $pass = ConvertTo-SecureString "your_password" -AsPlainText -Force
-    .\scp_files.ps1 `
-        -SourceListPath "C:\path\to\file_list.txt" `
-        -RemoteUser "username" `
-        -RemoteHost "server.example.com" `
-        -LocalDestination "C:\Downloads\files" `
-        -Password $pass
+        -RemoteHost "server.example.com"
 
 .NOTES
     Requirements:
@@ -59,13 +42,7 @@ param(
     [string]$RemoteUser,
     
     [Parameter(Mandatory=$true)]
-    [string]$RemoteHost,
-    
-    [Parameter(Mandatory=$true)]
-    [string]$LocalDestination,
-    
-    [Parameter(Mandatory=$false)]
-    [SecureString]$Password = (Read-Host -AsSecureString "Enter password")
+    [string]$RemoteHost
 )
 
 # Create timestamped output directory
