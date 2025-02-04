@@ -65,6 +65,24 @@ $successCount = 0
 Write-Host "`nStarting transfer of $totalFiles files..."
 Write-Host "Destination directory: $outputDir`n"
 
+# Set up SSH control socket
+$sshDir = Join-Path $env:USERPROFILE ".ssh"
+if (-not (Test-Path $sshDir)) {
+    New-Item -ItemType Directory -Path $sshDir | Out-Null
+}
+$controlPath = Join-Path $sshDir "control-socket-%r@%h-%p"
+
+# Initialize the SSH control master connection
+Write-Host "Establishing SSH connection..."
+$sshArgs = @(
+    "-o", "ControlMaster=yes"
+    "-o", "ControlPath=$controlPath"
+    "-o", "ControlPersist=yes"
+    "${RemoteUser}@${RemoteHost}"
+    "exit"
+)
+Start-Process -FilePath "ssh" -ArgumentList $sshArgs -Wait -NoNewWindow
+
 foreach ($file in $files) {
     # Preserve the full path structure, but remove leading slash
     $relativePath = $file.TrimStart('/')
@@ -78,9 +96,9 @@ foreach ($file in $files) {
     
     Write-Host "Copying: $file"
     try {
-        # Use native scp command
+        # Use native scp command with control socket
         $scpArgs = @(
-            "-o", "BatchMode=no"
+            "-o", "ControlPath=$controlPath"
             "${RemoteUser}@${RemoteHost}:${file}"
             $localPath
         )
@@ -98,6 +116,14 @@ foreach ($file in $files) {
     }
     Write-Host ""
 }
+
+# Clean up the control socket
+$sshArgs = @(
+    "-O", "exit"
+    "-o", "ControlPath=$controlPath"
+    "${RemoteUser}@${RemoteHost}"
+)
+Start-Process -FilePath "ssh" -ArgumentList $sshArgs -Wait -NoNewWindow
 
 Write-Host "Transfer complete. Successfully copied $successCount out of $totalFiles files."
 Write-Host "Files are in: $outputDir" 
