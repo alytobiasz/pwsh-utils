@@ -5,7 +5,7 @@
 .DESCRIPTION
     This script reads a list of file paths from a text file and copies each file
     from a Linux server to a local Windows directory using SCP. It uses native
-    PowerShell SSH commands for secure file transfer.
+    OpenSSH scp command for secure file transfer.
 
 .PARAMETER SourceListPath
     Path to a text file containing Linux file paths (one per line)
@@ -78,10 +78,6 @@ $files = Get-Content $SourceListPath | Where-Object { $_.Trim() -ne "" }
 $totalFiles = $files.Count
 $successCount = 0
 
-# Create PSCredential object
-$username = $RemoteUser
-$credentials = New-Object System.Management.Automation.PSCredential($username, $Password)
-
 Write-Host "`nStarting transfer of $totalFiles files..."
 Write-Host "Destination directory: $LocalDestination`n"
 
@@ -91,24 +87,26 @@ foreach ($file in $files) {
     
     Write-Host "Copying: $file"
     try {
-        # Use native scp command with credentials
-        $result = Get-SCPItem -ComputerName $RemoteHost `
-                            -Credential $credentials `
-                            -Path $file `
-                            -Destination $localPath `
-                            -ErrorAction Stop
-
-        Write-Host "Success: Copied to $localPath" -ForegroundColor Green
-        $successCount++
+        # Use native scp command
+        $scpArgs = @(
+            "-o", "BatchMode=no"
+            "${RemoteUser}@${RemoteHost}:${file}"
+            $localPath
+        )
+        
+        $process = Start-Process -FilePath "scp" -ArgumentList $scpArgs -Wait -NoNewWindow -PassThru
+        
+        if ($process.ExitCode -eq 0) {
+            Write-Host "Success: Copied to $localPath" -ForegroundColor Green
+            $successCount++
+        } else {
+            Write-Host "Failed to copy file. Exit code: $($process.ExitCode)" -ForegroundColor Red
+        }
     } catch {
         Write-Host "Error copying file: $_" -ForegroundColor Red
     }
     Write-Host ""
 }
-
-# Clear sensitive data
-$credentials = $null
-[System.GC]::Collect()
 
 Write-Host "Transfer complete. Successfully copied $successCount out of $totalFiles files."
 Write-Host "Files are in: $LocalDestination" 
