@@ -5,7 +5,8 @@
 .DESCRIPTION
     This script reads a list of file paths from a text file and copies each file
     from a Linux server to a local Windows directory using SCP. It uses native
-    OpenSSH scp command for secure file transfer.
+    OpenSSH scp command for secure file transfer. Files are saved to a timestamped
+    folder under ./data/output/.
 
 .PARAMETER SourceListPath
     Path to a text file containing Linux file paths (one per line)
@@ -67,11 +68,17 @@ param(
     [SecureString]$Password = (Read-Host -AsSecureString "Enter password")
 )
 
-# Create destination directory if it doesn't exist
-if (-not (Test-Path $LocalDestination)) {
-    New-Item -ItemType Directory -Path $LocalDestination | Out-Null
-    Write-Host "Created destination directory: $LocalDestination"
+# Create timestamped output directory
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$baseDir = Join-Path $PSScriptRoot "data"
+$outputDir = Join-Path $baseDir "output${timestamp}"
+
+# Create directory structure if it doesn't exist
+if (-not (Test-Path $baseDir)) {
+    New-Item -ItemType Directory -Path $baseDir | Out-Null
 }
+New-Item -ItemType Directory -Path $outputDir | Out-Null
+Write-Host "Created output directory: $outputDir"
 
 # Read the list of files
 $files = Get-Content $SourceListPath | Where-Object { $_.Trim() -ne "" }
@@ -79,11 +86,18 @@ $totalFiles = $files.Count
 $successCount = 0
 
 Write-Host "`nStarting transfer of $totalFiles files..."
-Write-Host "Destination directory: $LocalDestination`n"
+Write-Host "Destination directory: $outputDir`n"
 
 foreach ($file in $files) {
-    $fileName = Split-Path $file -Leaf
-    $localPath = Join-Path $LocalDestination $fileName
+    # Preserve the full path structure, but remove leading slash
+    $relativePath = $file.TrimStart('/')
+    $localPath = Join-Path $outputDir $relativePath
+    
+    # Create the directory structure for this file
+    $localDir = Split-Path $localPath -Parent
+    if (-not (Test-Path $localDir)) {
+        New-Item -ItemType Directory -Path $localDir -Force | Out-Null
+    }
     
     Write-Host "Copying: $file"
     try {
@@ -109,4 +123,4 @@ foreach ($file in $files) {
 }
 
 Write-Host "Transfer complete. Successfully copied $successCount out of $totalFiles files."
-Write-Host "Files are in: $LocalDestination" 
+Write-Host "Files are in: $outputDir" 
