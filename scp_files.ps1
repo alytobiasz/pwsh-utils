@@ -65,18 +65,15 @@ $successCount = 0
 Write-Host "`nStarting transfer of $totalFiles files..."
 Write-Host "Destination directory: $outputDir`n"
 
-# Set up SSH control socket
-$sshDir = Join-Path $env:USERPROFILE ".ssh"
-if (-not (Test-Path $sshDir)) {
-    New-Item -ItemType Directory -Path $sshDir | Out-Null
-}
-$controlPath = Join-Path $sshDir "ctrl-$RemoteHost-22"
+# Set up SSH control socket in temp directory
+$tempDir = [System.IO.Path]::GetTempPath()
+$controlPath = Join-Path $tempDir "ssh-ctrl-$RemoteHost"
 
 # Initialize the SSH control master connection
 Write-Host "Establishing SSH connection..."
 $sshArgs = @(
-    "-o", "ControlMaster=yes"
-    "-o", "ControlPath=`"$controlPath`""
+    "-M"  # Create master connection
+    "-S", "`"$controlPath`""  # Specify socket path
     "-o", "ControlPersist=4h"
     "${RemoteUser}@${RemoteHost}"
     "exit"
@@ -119,8 +116,8 @@ foreach ($file in $files) {
 
 # Clean up the control socket
 $sshArgs = @(
+    "-S", "`"$controlPath`""
     "-O", "exit"
-    "-o", "ControlPath=`"$controlPath`""
     "${RemoteUser}@${RemoteHost}"
 )
 Start-Process -FilePath "ssh" -ArgumentList $sshArgs -Wait -NoNewWindow
