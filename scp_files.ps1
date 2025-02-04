@@ -70,14 +70,14 @@ $sshDir = Join-Path $env:USERPROFILE ".ssh"
 if (-not (Test-Path $sshDir)) {
     New-Item -ItemType Directory -Path $sshDir | Out-Null
 }
-$controlPath = Join-Path $sshDir "control-socket-%r@%h-%p"
+$controlPath = Join-Path $sshDir "ctrl-$RemoteHost-22"
 
 # Initialize the SSH control master connection
 Write-Host "Establishing SSH connection..."
 $sshArgs = @(
     "-o", "ControlMaster=yes"
-    "-o", "ControlPath=$controlPath"
-    "-o", "ControlPersist=yes"
+    "-o", "ControlPath=`"$controlPath`""
+    "-o", "ControlPersist=4h"
     "${RemoteUser}@${RemoteHost}"
     "exit"
 )
@@ -98,7 +98,7 @@ foreach ($file in $files) {
     try {
         # Use native scp command with control socket
         $scpArgs = @(
-            "-o", "ControlPath=$controlPath"
+            "-o", "ControlPath=`"$controlPath`""
             "${RemoteUser}@${RemoteHost}:${file}"
             $localPath
         )
@@ -120,7 +120,7 @@ foreach ($file in $files) {
 # Clean up the control socket
 $sshArgs = @(
     "-O", "exit"
-    "-o", "ControlPath=$controlPath"
+    "-o", "ControlPath=`"$controlPath`""
     "${RemoteUser}@${RemoteHost}"
 )
 Start-Process -FilePath "ssh" -ArgumentList $sshArgs -Wait -NoNewWindow
