@@ -65,9 +65,14 @@ $successCount = 0
 Write-Host "`nStarting transfer of $totalFiles files..."
 Write-Host "Destination directory: $outputDir`n"
 
-# Start SSH agent and add default key
-Start-Process -FilePath "ssh-agent" -Wait -NoNewWindow
-$env:SSH_AUTH_SOCK = $null  # Force SSH to prompt for password only once
+# First establish SSH connection to cache credentials
+Write-Host "Establishing initial connection..."
+$sshArgs = @(
+    "-o", "NumberOfPasswordPrompts=1"
+    "${RemoteUser}@${RemoteHost}"
+    "exit"
+)
+Start-Process -FilePath "ssh" -ArgumentList $sshArgs -Wait -NoNewWindow
 
 foreach ($file in $files) {
     # Preserve the full path structure, but remove leading slash
@@ -82,9 +87,10 @@ foreach ($file in $files) {
     
     Write-Host "Copying: $file"
     try {
-        # Use native scp command
+        # Use native scp command with same authentication settings
         $scpArgs = @(
-            "-o", "BatchMode=no"
+            "-o", "NumberOfPasswordPrompts=1"
+            "-o", "PreferredAuthentications=password,keyboard-interactive"
             "${RemoteUser}@${RemoteHost}:${file}"
             $localPath
         )
