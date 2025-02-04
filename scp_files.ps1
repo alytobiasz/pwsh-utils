@@ -65,20 +65,9 @@ $successCount = 0
 Write-Host "`nStarting transfer of $totalFiles files..."
 Write-Host "Destination directory: $outputDir`n"
 
-# Set up SSH control socket in temp directory
-$tempDir = [System.IO.Path]::GetTempPath()
-$controlPath = Join-Path $tempDir "ssh-ctrl-$RemoteHost"
-
-# Initialize the SSH control master connection
-Write-Host "Establishing SSH connection..."
-$sshArgs = @(
-    "-M"  # Create master connection
-    "-S", "`"$controlPath`""  # Specify socket path
-    "-o", "ControlPersist=4h"
-    "${RemoteUser}@${RemoteHost}"
-    "exit"
-)
-Start-Process -FilePath "ssh" -ArgumentList $sshArgs -Wait -NoNewWindow
+# Start SSH agent and add default key
+Start-Process -FilePath "ssh-agent" -Wait -NoNewWindow
+$env:SSH_AUTH_SOCK = $null  # Force SSH to prompt for password only once
 
 foreach ($file in $files) {
     # Preserve the full path structure, but remove leading slash
@@ -93,9 +82,9 @@ foreach ($file in $files) {
     
     Write-Host "Copying: $file"
     try {
-        # Use native scp command with control socket
+        # Use native scp command
         $scpArgs = @(
-            "-o", "ControlPath=`"$controlPath`""
+            "-o", "BatchMode=no"
             "${RemoteUser}@${RemoteHost}:${file}"
             $localPath
         )
@@ -113,14 +102,6 @@ foreach ($file in $files) {
     }
     Write-Host ""
 }
-
-# Clean up the control socket
-$sshArgs = @(
-    "-S", "`"$controlPath`""
-    "-O", "exit"
-    "${RemoteUser}@${RemoteHost}"
-)
-Start-Process -FilePath "ssh" -ArgumentList $sshArgs -Wait -NoNewWindow
 
 Write-Host "Transfer complete. Successfully copied $successCount out of $totalFiles files."
 Write-Host "Files are in: $outputDir" 
